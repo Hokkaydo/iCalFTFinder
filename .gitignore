@@ -13,5 +13,8 @@ gradle-app.setting
 #Schedules files
 src/main/resources/schedules/*
 
+#Output file
+*.txt
+
 # # Work around https://youtrack.jetbrains.com/issue/IDEA-116898
 # gradle/wrapper/gradle-wrapper.properties
