@@ -36,7 +36,7 @@ public class Main {
     // This Map MUST contain :
     //      As KEY : the schedule id (see up)
     //      As VALUE : a path to the iCalendar to process
-    private static final Map<String, String> schedules = Map.of(
+    private final Map<String, String> schedules = Map.of(
 
     );
 
