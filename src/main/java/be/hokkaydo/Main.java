@@ -211,7 +211,7 @@ public class Main {
 
                 /*
                    If the crossed interval has already been crossed with the processed schedule, we skip to next interval.
-                   It permits to avoid doubled values
+                   It permits to avoid cases where the schedule is matched with itself
                 */
                 if(crossingInterval.scheduleIntervals
                         .stream()
