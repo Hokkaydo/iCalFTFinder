@@ -1,7 +1,13 @@
 package be.hokkaydo;
 
 import java.sql.Timestamp;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeFormatterBuilder;
+import java.time.temporal.ChronoField;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.Collectors;
 
 /**
  * Simple interval class. Store a {@link Timestamp} for the start and a {@link Timestamp} for the end of this {@link Interval}
@@ -31,20 +37,71 @@ public class Interval {
      * @throws IllegalArgumentException if no crossing is detected between the two intervals
      * */
     public Interval getCrossingInterval(Interval interval) {
-        if(!isCrossing(interval)) throw new IllegalArgumentException("No crossing detected");
+        if (!isCrossing(interval)) throw new IllegalArgumentException("No crossing detected");
         Timestamp crossingStart = start.before(interval.start) ? interval.start : start;
         Timestamp crossingEnd = end.before(interval.end) ? end : interval.end;
+        DateTimeFormatter intervalEndFormatter = new DateTimeFormatterBuilder()
+                .appendValue(ChronoField.DAY_OF_MONTH)
+                .appendLiteral('/')
+                .appendValue(ChronoField.MONTH_OF_YEAR)
+                .appendLiteral('/')
+                .appendValue(ChronoField.YEAR)
+                .appendLiteral(" à ")
+                .appendValue(ChronoField.HOUR_OF_DAY)
+                .appendLiteral(':')
+                .appendValue(ChronoField.MINUTE_OF_HOUR)
+                .appendLiteral(':')
+                .appendValue(ChronoField.SECOND_OF_MINUTE)
+                .toFormatter()
+                .withZone(ZoneId.of("UTC+2"))
+                .withLocale(Locale.FRANCE);
         return new Interval(crossingStart, crossingEnd);
+    }
+
+    @Override
+    public String toString() {
+        return "Interval{" +
+                "start=" + start +
+                ", end=" + end +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        Interval interval = (Interval) o;
+
+        if (!start.equals(interval.start)) return false;
+        return end.equals(interval.end);
+    }
+
+    @Override
+    public int hashCode() {
+        int result = start.hashCode();
+        result = 31 * result + end.hashCode();
+        return result;
     }
 
     /**
      * Simple extending of {@link Interval} class to additionnaly store the schedule id (defined in {@link Main} class)
-     * */
-    public static class ScheduleInterval extends Interval{
+     */
+    public static class ScheduleInterval extends Interval {
         public final String scheduleId;
+
         public ScheduleInterval(String scheduleId, Timestamp start, Timestamp end) {
             super(start, end);
             this.scheduleId = scheduleId;
+        }
+
+        @Override
+        public String toString() {
+            return "ScheduleInterval{" +
+                    "start=" + start +
+                    ", end=" + end +
+                    ", scheduleId='" + scheduleId + '\'' +
+                    '}';
         }
     }
 
@@ -54,19 +111,61 @@ public class Interval {
     public static class ScheduleFreeIntervals {
         public final String scheduleId;
         public final List<Interval> intervals;
-        public ScheduleFreeIntervals(String scheduleId, List<Interval> intervals){
+
+        public ScheduleFreeIntervals(String scheduleId, List<Interval> intervals) {
             this.scheduleId = scheduleId;
             this.intervals = intervals;
         }
+
+        @Override
+        public String toString() {
+            return "ScheduleFreeIntervals{" +
+                    "scheduleId='" + scheduleId + '\'' +
+                    ", intervals=" + intervals +
+                    '}';
+        }
     }
+
     /**
      * Simple extending of {@link Interval} class to additionnaly store the {@link ScheduleFreeIntervals} involved in this crossed interval
-     * */
+     */
     public static class CrossingInterval extends Interval {
         public final List<ScheduleInterval> scheduleIntervals;
+
         public CrossingInterval(List<ScheduleInterval> scheduleIntervals, Timestamp start, Timestamp end) {
             super(start, end);
             this.scheduleIntervals = scheduleIntervals;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            if (!super.equals(o)) return false;
+
+            CrossingInterval that = (CrossingInterval) o;
+
+            List<String> thatScheduledIntervalId = that.scheduleIntervals.stream().map(scheduleInterval -> scheduleInterval.scheduleId).collect(Collectors.toList());
+            for (ScheduleInterval scheduleInterval : scheduleIntervals) {
+                if (!thatScheduledIntervalId.contains(scheduleInterval.scheduleId)) return false;
+            }
+            return true;
+        }
+
+        @Override
+        public int hashCode() {
+            int result = super.hashCode();
+            result = 31 * result + scheduleIntervals.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "CrossingInterval{" +
+                    "start=" + start +
+                    ", end=" + end +
+                    ", scheduleIntervals=" + scheduleIntervals +
+                    '}';
         }
     }
 }

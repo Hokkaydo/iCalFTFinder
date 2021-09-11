@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 
 /**
@@ -50,44 +51,50 @@ public class Main {
     private void findSharedFreeTime() throws IOException {
         List<Interval.ScheduleFreeIntervals> free = new ArrayList<>();
 
-        schedules.forEach((id, filescheduleId) -> {
+        schedules.forEach((id, fileScheduleId) -> {
             //For each registered scheduled, we try to find the free intervals of time and we add them to a global list
             try {
-                free.add(retrieveFreeIntervals(filescheduleId, id));
+                free.add(retrieveFreeIntervals(fileScheduleId, id));
             } catch (ParserException | IOException e) {
                 e.printStackTrace();
             }
         });
 
-        List<Interval.CrossingInterval> finalList = crossIntervals(0, new ArrayList<>(), free, new ArrayList<>());
+        List<Interval.CrossingInterval> tempList = crossIntervals(0, new ArrayList<>(), free, new ArrayList<>());
+        List<Interval.CrossingInterval> finalList = tempList
+                .stream()
+                // We filter the list to remove all possible doubled values
+                .distinct()
+                // We sort the crossed interval based on which is before the other
+                .sorted((c1, c2) -> {
+                    if (c1.start.toInstant().isBefore(c2.start.toInstant())) return -1;
+                    if (c1.start.toInstant().isAfter(c2.start.toInstant())) return 1;
+                    return 0;
+                })
+                .collect(Collectors.toList());
 
-        //We sort the crossed interval based on which is before the other
-        finalList.sort((c1, c2) -> {
-            if(c1.start.toInstant().isBefore(c2.start.toInstant())) return -1;
-            if(c1.start.toInstant().isAfter(c2.start.toInstant())) return 1;
-            return 0;
-        });
 
-        //We determine the scheduleId of the file in which the data will be written to
-        StringBuilder filescheduleIdBuilder = new StringBuilder();
-        schedules.forEach((id, filescheduleId) -> filescheduleIdBuilder.append(id).append("-"));
-        String filescheduleId = filescheduleIdBuilder.substring(0, filescheduleIdBuilder.length() - 1) + "--schedule-cross.txt";
+        // We determine the scheduleId of the file in which the data will be written to
+        StringBuilder fileScheduleIdBuilder = new StringBuilder();
+        schedules.forEach((id, fileScheduleId) -> fileScheduleIdBuilder.append(id).append("-"));
+        String fileScheduleId = fileScheduleIdBuilder.substring(0, fileScheduleIdBuilder.length() - 1) + "--schedule-cross.txt";
 
-        printProcessedDataToFile(filescheduleId, finalList);
+        printProcessedDataToFile(fileScheduleId, finalList);
     }
 
     /**
      * We process the iCalendar of the given course to find free intervals
-     * @param filescheduleId the scheduleId of the file where the iCalendar is stored
-     * @param scheduleId the arbitrary given schedule it used to identify it
+     *
+     * @param fileScheduleId the scheduleId of the file where the iCalendar is stored
+     * @param scheduleId     the arbitrary given schedule it used to identify it
      * @return an {@link be.hokkaydo.Interval.ScheduleFreeIntervals} containing the scheduleId and its free intervals
-     * */
-    private Interval.ScheduleFreeIntervals retrieveFreeIntervals(String filescheduleId, String scheduleId)
+     */
+    private Interval.ScheduleFreeIntervals retrieveFreeIntervals(String fileScheduleId, String scheduleId)
             throws ParserException, IOException {
         List<Course> courses = new ArrayList<>();
 
         // We retrieve the iCalendar using the ICal4J API
-        Calendar calendar = Calendars.load(Objects.requireNonNull(Main.class.getClassLoader().getResource(filescheduleId)).getFile());
+        Calendar calendar = Calendars.load(Objects.requireNonNull(Main.class.getClassLoader().getResource(fileScheduleId)).getFile());
 
         // We define an endTimeStamp which will be used later to determine if a course start when the other end or not.
         Timestamp endTimestamp = Timestamp.from(Instant.EPOCH);
@@ -211,28 +218,30 @@ public class Main {
 
                 /*
                    If the crossed interval has already been crossed with the processed schedule, we skip to next interval.
-                   It permits to avoid doubled values
+                   It permits to avoid cases where the schedule is matched with itself
                 */
                 if(crossingInterval.scheduleIntervals
                         .stream()
                         .anyMatch(scheduleInterval -> scheduleInterval.scheduleId.equals(first.scheduleId))) continue;
 
                 // Check if both intervals can be crossed
-                if(interval.isCrossing(crossingInterval)){
+                if(interval.isCrossing(crossingInterval)) {
                     /*
                        We add the concerned interval of the processed schedule to the list of intervals to allows
                        to define a crossing interval
                     */
-                    crossingInterval.scheduleIntervals.add(new Interval.ScheduleInterval(
+                    List<Interval.ScheduleInterval> scheduleIntervals = new ArrayList<>(crossingInterval.scheduleIntervals);
+                    scheduleIntervals.add(new Interval.ScheduleInterval(
                             first.scheduleId,
                             interval.start,
-                            interval.end)
-                    );
+                            interval.end
+                    ));
+
                     /*
                        We cross the processed interval and the previously crossed interval together and
                        it gives us a simple Interval
                     */
-                    Interval cross =  interval.getCrossingInterval(crossingInterval);
+                    Interval cross = interval.getCrossingInterval(crossingInterval);
                     /*
                         We create then a new CrossingInterval containing the updated information about involved intervals
                         and start & end of the crossed interval
@@ -241,14 +250,17 @@ public class Main {
                         However, it also allows us to keep track of all crossed intervals (see next line)
                     */
                     Interval.CrossingInterval newCrossingInterval = new Interval.CrossingInterval(
-                            crossingInterval.scheduleIntervals,
+                            scheduleIntervals,
                             cross.start,
                             cross.end
                     );
+
+                    // We add the new interval to the save list
                     crossedIntervals.add(newCrossingInterval);
 
                     // We add the new interval to the newly crossed list
                     newList.add(newCrossingInterval);
+
                 }
             }
         }
@@ -257,10 +269,11 @@ public class Main {
 
     /**
      * We print the previously got data in a file
-     * @param filescheduleId the scheduleId of the file to write into
-     * @param data the data to write
-     * */
-    private void printProcessedDataToFile(String filescheduleId, List<Interval.CrossingInterval> data) throws IOException {
+     *
+     * @param fileScheduleId the scheduleId of the file to write into
+     * @param data           the data to write
+     */
+    private void printProcessedDataToFile(String fileScheduleId, List<Interval.CrossingInterval> data) throws IOException {
         //This DateTimeFormatter will format following this pattern : Day/Month/Year de Hours:Minutes:Seconds
         DateTimeFormatter intervalStartFormatter = new DateTimeFormatterBuilder()
                 .appendValue(ChronoField.DAY_OF_MONTH).appendLiteral('/')
@@ -292,9 +305,9 @@ public class Main {
                 .withZone(ZoneId.of("UTC+2"))
                 .withLocale(Locale.FRANCE);
 
-        File file =  new File(filescheduleId);
-        if(!file.createNewFile()) throw new IllegalStateException("File " + filescheduleId + " could not be created");
-        FileWriter fileWriter = new FileWriter(filescheduleId);
+        File file = new File(fileScheduleId);
+        file.createNewFile();
+        FileWriter fileWriter = new FileWriter(fileScheduleId);
 
         /*
          Pattern :
