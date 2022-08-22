@@ -184,9 +184,9 @@ public class Main {
         */
         if(crossProcessingIntervals.size() == 0) {
             List<Interval.CrossingInterval> newCrossProcessingIntervals = new ArrayList<>();
-            for (Interval interval : first.intervals) {
+            for (Interval interval : first.intervals()) {
                 List<Interval.ScheduleInterval> scheduleIntervals = new ArrayList<>();
-                scheduleIntervals.add(new Interval.ScheduleInterval(first.scheduleId, interval.start, interval.end));
+                scheduleIntervals.add(new Interval.ScheduleInterval(first.scheduleId(), interval.start, interval.end));
                 Interval.CrossingInterval crossingInterval = new Interval.CrossingInterval(
                         scheduleIntervals,
                         interval.start,
@@ -199,10 +199,10 @@ public class Main {
 
         // We split the ScheduleFree objects in a List of CrossingInterval containing the same information separated
         for (Interval.ScheduleFreeIntervals scheduleFree : scheduleFreeIntervals) {
-            for (Interval interval1 : scheduleFree.intervals) {
+            for (Interval interval1 : scheduleFree.intervals()) {
                 List<Interval.ScheduleInterval> list = new ArrayList<>(
                         Collections.singletonList(
-                                new Interval.ScheduleInterval(scheduleFree.scheduleId, interval1.start, interval1.end)
+                                new Interval.ScheduleInterval(scheduleFree.scheduleId(), interval1.start, interval1.end)
                         )
                 );
                 crossProcessingIntervals.add(new Interval.CrossingInterval(list, interval1.start, interval1.end));
@@ -213,7 +213,7 @@ public class Main {
         List<Interval.CrossingInterval> newList = new ArrayList<>();
 
         // For each interval of actually processed schedule, we cross it with the already previously crossed intervals
-        for (Interval interval : first.intervals) {
+        for (Interval interval : first.intervals()) {
             for (Interval.CrossingInterval crossingInterval : crossProcessingIntervals) {
 
                 /*
@@ -222,7 +222,7 @@ public class Main {
                 */
                 if(crossingInterval.scheduleIntervals
                         .stream()
-                        .anyMatch(scheduleInterval -> scheduleInterval.scheduleId.equals(first.scheduleId))) continue;
+                        .anyMatch(scheduleInterval -> scheduleInterval.scheduleId.equals(first.scheduleId()))) continue;
 
                 // Check if both intervals can be crossed
                 if(interval.isCrossing(crossingInterval)) {
@@ -232,7 +232,7 @@ public class Main {
                     */
                     List<Interval.ScheduleInterval> scheduleIntervals = new ArrayList<>(crossingInterval.scheduleIntervals);
                     scheduleIntervals.add(new Interval.ScheduleInterval(
-                            first.scheduleId,
+                            first.scheduleId(),
                             interval.start,
                             interval.end
                     ));
@@ -341,13 +341,8 @@ public class Main {
         fileWriter.close();
     }
 
-    public static class Course{
-        public final Interval interval;
-        public final Component component;
-        public Course(Component component, Interval interval) {
-            this.component = component;
-            this.interval = interval;
-        }
+    public record Course(Component component, Interval interval) {
+
     }
 
 }

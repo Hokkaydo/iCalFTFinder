@@ -2,7 +2,6 @@ package be.hokkaydo;
 
 import java.sql.Timestamp;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * Stores a {@link Timestamp} for the start and a {@link Timestamp} for the end of this {@link Interval}
@@ -85,25 +84,20 @@ public class Interval {
         }
     }
 
-    /**
-     * This class stores free intervals for a particular schedule (identified by the scheduleId)
-     * */
-    public static class ScheduleFreeIntervals {
-        public final String scheduleId;
-        public final List<Interval> intervals;
 
-        public ScheduleFreeIntervals(String scheduleId, List<Interval> intervals) {
-            this.scheduleId = scheduleId;
-            this.intervals = intervals;
-        }
+    /**
+     * Stores free intervals for a particular schedule (identified by the scheduleId)
+     */
+        public record ScheduleFreeIntervals(String scheduleId, List<Interval> intervals) {
 
         @Override
-        public String toString() {
-            return "ScheduleFreeIntervals{" +
-                    "scheduleId='" + scheduleId + '\'' +
-                    ", intervals=" + intervals +
-                    '}';
-        }
+            public String toString() {
+                return "ScheduleFreeIntervals{" +
+                               "scheduleId='" + scheduleId + '\'' +
+                               ", intervals=" + intervals +
+                               '}';
+            }
+
     }
 
     /**
@@ -125,7 +119,7 @@ public class Interval {
 
             CrossingInterval that = (CrossingInterval) o;
 
-            List<String> thatScheduledIntervalId = that.scheduleIntervals.stream().map(scheduleInterval -> scheduleInterval.scheduleId).collect(Collectors.toList());
+            List<String> thatScheduledIntervalId = that.scheduleIntervals.stream().map(scheduleInterval -> scheduleInterval.scheduleId).toList();
             for (ScheduleInterval scheduleInterval : scheduleIntervals) {
                 if (!thatScheduledIntervalId.contains(scheduleInterval.scheduleId)) return false;
             }
