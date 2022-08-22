@@ -1,6 +1,7 @@
 plugins {
     id 'java'
 }
+sourceCompatibility = '17'
 
 group 'be.hokkaydo'
 version '1.0-SNAPSHOT'
