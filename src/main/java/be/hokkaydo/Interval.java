@@ -10,7 +10,7 @@ import java.util.Locale;
 import java.util.stream.Collectors;
 
 /**
- * Simple interval class. Store a {@link Timestamp} for the start and a {@link Timestamp} for the end of this {@link Interval}
+ * Stores a {@link Timestamp} for the start and a {@link Timestamp} for the end of this {@link Interval}
  * */
 public class Interval {
 
@@ -22,16 +22,16 @@ public class Interval {
     }
 
     /**
-     * Check if the current interval crossed the given one
+     * Checks if the current interval cross another one
      * @param interval the interval to check crossing with
-     * @return true if both intervals cross together, false otherwise
+     * @return true if both intervals are crossing together, false otherwise
      * */
     public boolean isCrossing(Interval interval) {
         return !end.before(interval.start) && !end.equals(interval.start) && !interval.end.before(start) && !interval.end.equals(start);
     }
 
     /**
-     * Get the crossing interval between the given and the current one
+     * Retrieves the crossing interval between the current one and another
      * @param interval the interval to cross with
      * @return a new {@link Interval} crossing current and given intervals
      * @throws IllegalArgumentException if no crossing is detected between the two intervals
@@ -40,21 +40,6 @@ public class Interval {
         if (!isCrossing(interval)) throw new IllegalArgumentException("No crossing detected");
         Timestamp crossingStart = start.before(interval.start) ? interval.start : start;
         Timestamp crossingEnd = end.before(interval.end) ? end : interval.end;
-        DateTimeFormatter intervalEndFormatter = new DateTimeFormatterBuilder()
-                .appendValue(ChronoField.DAY_OF_MONTH)
-                .appendLiteral('/')
-                .appendValue(ChronoField.MONTH_OF_YEAR)
-                .appendLiteral('/')
-                .appendValue(ChronoField.YEAR)
-                .appendLiteral(" à ")
-                .appendValue(ChronoField.HOUR_OF_DAY)
-                .appendLiteral(':')
-                .appendValue(ChronoField.MINUTE_OF_HOUR)
-                .appendLiteral(':')
-                .appendValue(ChronoField.SECOND_OF_MINUTE)
-                .toFormatter()
-                .withZone(ZoneId.of("UTC+2"))
-                .withLocale(Locale.FRANCE);
         return new Interval(crossingStart, crossingEnd);
     }
 
@@ -85,7 +70,7 @@ public class Interval {
     }
 
     /**
-     * Simple extending of {@link Interval} class to additionnaly store the schedule id (defined in {@link Main} class)
+     * Simple extending of {@link Interval} class to additionally store the schedule id
      */
     public static class ScheduleInterval extends Interval {
         public final String scheduleId;
@@ -127,7 +112,7 @@ public class Interval {
     }
 
     /**
-     * Simple extending of {@link Interval} class to additionnaly store the {@link ScheduleFreeIntervals} involved in this crossed interval
+     * Simple extending of {@link Interval} class to additionally store the {@link ScheduleFreeIntervals} involved in this crossed interval
      */
     public static class CrossingInterval extends Interval {
         public final List<ScheduleInterval> scheduleIntervals;

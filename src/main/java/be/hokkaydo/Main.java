@@ -35,7 +35,7 @@ public class Main {
     //endregion
 
     // This Map MUST contain :
-    //      As KEY : the schedule id (see up)
+    //      As KEY : the schedule id
     //      As VALUE : a path to the iCalendar to process
     private final Map<String, String> schedules = Map.of(
 
@@ -46,13 +46,13 @@ public class Main {
     }
 
     /**
-     * Main method which initiate each others method call
+     * Main method which initiates other methods calls
      * */
     private void findSharedFreeTime() throws IOException {
         List<Interval.ScheduleFreeIntervals> free = new ArrayList<>();
 
         schedules.forEach((id, fileScheduleId) -> {
-            //For each registered scheduled, we try to find the free intervals of time and we add them to a global list
+            //For each registered schedule, we search for the free time, and we add it to a global list
             try {
                 free.add(retrieveFreeIntervals(fileScheduleId, id));
             } catch (ParserException | IOException e) {
@@ -65,7 +65,7 @@ public class Main {
                 .stream()
                 // We filter the list to remove all possible doubled values
                 .distinct()
-                // We sort the crossed interval based on which is before the other
+                // We sort the intervals based on which one starts first
                 .sorted((c1, c2) -> {
                     if (c1.start.toInstant().isBefore(c2.start.toInstant())) return -1;
                     if (c1.start.toInstant().isAfter(c2.start.toInstant())) return 1;
@@ -87,7 +87,7 @@ public class Main {
      *
      * @param fileScheduleId the scheduleId of the file where the iCalendar is stored
      * @param scheduleId     the arbitrary given schedule it used to identify it
-     * @return an {@link be.hokkaydo.Interval.ScheduleFreeIntervals} containing the scheduleId and its free intervals
+     * @return an {@link Interval.ScheduleFreeIntervals} containing the scheduleId and its free intervals
      */
     private Interval.ScheduleFreeIntervals retrieveFreeIntervals(String fileScheduleId, String scheduleId)
             throws ParserException, IOException {
@@ -96,11 +96,11 @@ public class Main {
         // We retrieve the iCalendar using the ICal4J API
         Calendar calendar = Calendars.load(Objects.requireNonNull(Main.class.getClassLoader().getResource(fileScheduleId)).getFile());
 
-        // We define an endTimeStamp which will be used later to determine if a course start when the other end or not.
+        // We define an endTimeStamp which will be used later to determine if a course starts when the other ends or not.
         Timestamp endTimestamp = Timestamp.from(Instant.EPOCH);
 
         /*
-          We loop over each course present in the schedule and we create a Course object which will be used later.
+          We loop over schedule's courses, and we create a Course object which will be used later.
           It contains the course scheduleId as well as the timestamp of start and end of this course.
         */
         for (Component component : (List<Component>)calendar.getComponents()) {
@@ -118,7 +118,7 @@ public class Main {
             courses.add(new Course(component, new Interval(start, end)));
         }
 
-        // We sort the courses according to the fact if they are before or after the other
+        // We sort the courses according to which one starts first
         courses.sort((c1, c2) -> {
             if(c1.interval.start.toInstant().isBefore(c2.interval.start.toInstant())) return -1;
             if(c1.interval.start.toInstant().isAfter(c2.interval.start.toInstant())) return 1;
@@ -129,8 +129,8 @@ public class Main {
         List<Interval> free = new ArrayList<>();
         for (Course course : courses) {
             /*
-                If the endTimeStamp is equal 0, it means we just started to loop over the schedule, we can go next
-                without forgetting to change it the first course end timestamp
+                If the endTimeStamp is equal to 0, it means we just started to loop over the schedule, we can go next
+                without forgetting to change the first course end timestamp
                 If the previous course ends when the current course starts we don't have any free interval and as well
                 as for the 0 case, we can go next and change the end timestamp
                 If the previous course ends after the current course starts, the current course is the most likely a
@@ -152,7 +152,7 @@ public class Main {
 
 
     /**
-     * We cross each previously got interval with the ones from others schedules to determine which are at the same time
+     * Crosses the given intervals to find the shared free time
      * @param i an integer to stop the recursive call when needed (when it reaches the size of scheduleFreeIntervals
      * @param crossProcessingIntervals the intervals being processed by the recursive call. Should be empty at
      *                                 initialization, it gets filled by the recursive method
@@ -197,7 +197,7 @@ public class Main {
             return crossIntervals(i+1, newCrossProcessingIntervals, scheduleFreeIntervals, crossedIntervals);
         }
 
-        // We split the ScheduleFree objects in a List of CrossingInterval containing the same information but split
+        // We split the ScheduleFree objects in a List of CrossingInterval containing the same information separated
         for (Interval.ScheduleFreeIntervals scheduleFree : scheduleFreeIntervals) {
             for (Interval interval1 : scheduleFree.intervals) {
                 List<Interval.ScheduleInterval> list = new ArrayList<>(
@@ -227,7 +227,7 @@ public class Main {
                 // Check if both intervals can be crossed
                 if(interval.isCrossing(crossingInterval)) {
                     /*
-                       We add the concerned interval of the processed schedule to the list of intervals to allows
+                       We add the concerned interval of the processed schedule to the list of intervals to allow
                        to define a crossing interval
                     */
                     List<Interval.ScheduleInterval> scheduleIntervals = new ArrayList<>(crossingInterval.scheduleIntervals);
@@ -238,7 +238,7 @@ public class Main {
                     ));
 
                     /*
-                       We cross the processed interval and the previously crossed interval together and
+                       We cross the processed interval and the previously crossed interval together, and
                        it gives us a simple Interval
                     */
                     Interval cross = interval.getCrossingInterval(crossingInterval);
@@ -268,7 +268,7 @@ public class Main {
     }
 
     /**
-     * We print the previously got data in a file
+     * Prints data to file
      *
      * @param fileScheduleId the scheduleId of the file to write into
      * @param data           the data to write
