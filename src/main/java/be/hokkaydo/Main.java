@@ -8,6 +8,7 @@ import net.fortuna.ical4j.util.Calendars;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.net.URL;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -16,11 +17,11 @@ import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 
 /**
@@ -28,73 +29,75 @@ import java.util.stream.Collectors;
  */
 public class Main {
 
-    //region Schedules ids
-    //Those ids are just used to human identify the concerned intervals at the output.
-    //Write them down here
-
-    //endregion
-
-    // This Map MUST contain :
-    //      As KEY : the schedule id
-    //      As VALUE : a path to the iCalendar to process
-    private final Map<String, String> schedules = Map.of(
-
-    );
+    // Comparator for sorting intervals by start date
+    private static final Comparator<Interval> INTERVAL_COMPARATOR = Comparator.comparing(interval -> interval.start);
+    private final Map<String, String> schedules = new HashMap<>();
 
     public static void main(String[] args) throws IOException {
-        new Main().findSharedFreeTime();
+        new Main().findSharedFreeTime(args);
     }
 
     /**
      * Main method which initiates other methods calls
      * */
-    private void findSharedFreeTime() throws IOException {
+    private void findSharedFreeTime(String[] args) throws IOException {
+        if(args.length < 4) {
+            throw new IllegalArgumentException("You must at least specify two pairs of scheduleId/scheduleFilePath");
+        }
+        if(args.length % 2 != 0) {
+            throw new IllegalArgumentException("Usage: java -jar <jar_name> <schedule_id> <path_to_ical> <schedule_id> <path_to_ical> ...");
+        }
+        for (int i = 0; i < args.length; i+=2) {
+            String scheduleId = args[i];
+            String pathToIcal = args[i+1];
+            if(!new File(pathToIcal).exists()) {
+                throw new IllegalArgumentException("The file " + pathToIcal + " does not exist");
+            }
+            schedules.put(scheduleId, pathToIcal);
+        }
+
         List<Interval.ScheduleFreeIntervals> free = new ArrayList<>();
 
-        schedules.forEach((id, fileScheduleId) -> {
+        schedules.forEach((id, scheduleFilePath) -> {
             //For each registered schedule, we search for the free time, and we add it to a global list
             try {
-                free.add(retrieveFreeIntervals(fileScheduleId, id));
+                free.add(retrieveFreeIntervals(scheduleFilePath, id));
             } catch (ParserException | IOException e) {
                 e.printStackTrace();
             }
         });
 
-        List<Interval.CrossingInterval> tempList = crossIntervals(0, new ArrayList<>(), free, new ArrayList<>());
-        List<Interval.CrossingInterval> finalList = tempList
-                .stream()
-                // We filter the list to remove all possible doubled values
-                .distinct()
-                // We sort the intervals based on which one starts first
-                .sorted((c1, c2) -> {
-                    if (c1.start.toInstant().isBefore(c2.start.toInstant())) return -1;
-                    if (c1.start.toInstant().isAfter(c2.start.toInstant())) return 1;
-                    return 0;
-                })
-                .collect(Collectors.toList());
+        List<Interval.CrossingInterval> crossingIntervalList =
+                crossIntervals(0, new ArrayList<>(), free, new ArrayList<>())
+                        .stream()
+                        // We filter the list to remove all possible doubled values
+                        .distinct()
+                        // We sort the intervals based on which one starts first
+                        .sorted(INTERVAL_COMPARATOR)
+                        .toList();
 
 
-        // We determine the scheduleId of the file in which the data will be written to
+        // We determine the id of the file in which the data will be written to
         StringBuilder fileScheduleIdBuilder = new StringBuilder();
         schedules.forEach((id, fileScheduleId) -> fileScheduleIdBuilder.append(id).append("-"));
         String fileScheduleId = fileScheduleIdBuilder.substring(0, fileScheduleIdBuilder.length() - 1) + "--schedule-cross.txt";
 
-        printProcessedDataToFile(fileScheduleId, finalList);
+        printProcessedDataToFile(fileScheduleId, crossingIntervalList);
     }
 
     /**
-     * We process the iCalendar of the given course to find free intervals
+     * Processes given schedule to retrieve free intervals
      *
-     * @param fileScheduleId the scheduleId of the file where the iCalendar is stored
-     * @param scheduleId     the arbitrary given schedule it used to identify it
+     * @param scheduleFilePath the path to the file where the iCalendar is stored
+     * @param scheduleId       the schedule id used to identify it
      * @return an {@link Interval.ScheduleFreeIntervals} containing the scheduleId and its free intervals
      */
-    private Interval.ScheduleFreeIntervals retrieveFreeIntervals(String fileScheduleId, String scheduleId)
+    private Interval.ScheduleFreeIntervals retrieveFreeIntervals(String scheduleFilePath, String scheduleId)
             throws ParserException, IOException {
         List<Course> courses = new ArrayList<>();
 
         // We retrieve the iCalendar using the ICal4J API
-        Calendar calendar = Calendars.load(Objects.requireNonNull(Main.class.getClassLoader().getResource(fileScheduleId)).getFile());
+        Calendar calendar = Calendars.load(new URL("file://" + new File(scheduleFilePath).getAbsolutePath()));
 
         // We define an endTimeStamp which will be used later to determine if a course starts when the other ends or not.
         Timestamp endTimestamp = Timestamp.from(Instant.EPOCH);
@@ -103,7 +106,7 @@ public class Main {
           We loop over schedule's courses, and we create a Course object which will be used later.
           It contains the course scheduleId as well as the timestamp of start and end of this course.
         */
-        for (Component component : (List<Component>)calendar.getComponents()) {
+        for (Component component : (List<Component>) calendar.getComponents()) {
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("uuuuMMddHHmmssX");
             Timestamp start = Timestamp.from(
                     Instant.from(formatter.parse(
@@ -119,11 +122,7 @@ public class Main {
         }
 
         // We sort the courses according to which one starts first
-        courses.sort((c1, c2) -> {
-            if(c1.interval.start.toInstant().isBefore(c2.interval.start.toInstant())) return -1;
-            if(c1.interval.start.toInstant().isAfter(c2.interval.start.toInstant())) return 1;
-            return 0;
-        });
+        courses.sort(Comparator.comparing(course -> course.interval.start));
 
 
         List<Interval> free = new ArrayList<>();
@@ -218,11 +217,11 @@ public class Main {
 
                 /*
                    If the crossed interval has already been crossed with the processed schedule, we skip to next interval.
-                   It permits to avoid cases where the schedule is matched with itself
+                   It allows to avoid cases where the schedule is matched with itself
                 */
                 if(crossingInterval.scheduleIntervals
-                        .stream()
-                        .anyMatch(scheduleInterval -> scheduleInterval.scheduleId.equals(first.scheduleId()))) continue;
+                           .stream()
+                           .anyMatch(scheduleInterval -> scheduleInterval.scheduleId.equals(first.scheduleId()))) continue;
 
                 // Check if both intervals can be crossed
                 if(interval.isCrossing(crossingInterval)) {
@@ -275,35 +274,9 @@ public class Main {
      */
     private void printProcessedDataToFile(String fileScheduleId, List<Interval.CrossingInterval> data) throws IOException {
         //This DateTimeFormatter will format following this pattern : Day/Month/Year de Hours:Minutes:Seconds
-        DateTimeFormatter intervalStartFormatter = new DateTimeFormatterBuilder()
-                .appendValue(ChronoField.DAY_OF_MONTH).appendLiteral('/')
-                .appendValue(ChronoField.MONTH_OF_YEAR)
-                .appendLiteral('/')
-                .appendValue(ChronoField.YEAR)
-                .appendLiteral(" de ")
-                .appendValue(ChronoField.HOUR_OF_DAY)
-                .appendLiteral(':')
-                .appendValue(ChronoField.MINUTE_OF_HOUR).appendLiteral(':')
-                .appendValue(ChronoField.SECOND_OF_MINUTE)
-                .toFormatter()
-                .withZone(ZoneId.of("UTC+2"))
-                .withLocale(Locale.FRANCE);
+        DateTimeFormatter intervalStartFormatter = dateTimeFormatter("de");
         //This DateTimeFormatter will format following this pattern : Day/Month/Year à Hours:Minutes:Seconds
-        DateTimeFormatter intervalEndFormatter = new DateTimeFormatterBuilder()
-                .appendValue(ChronoField.DAY_OF_MONTH)
-                .appendLiteral('/')
-                .appendValue(ChronoField.MONTH_OF_YEAR)
-                .appendLiteral('/')
-                .appendValue(ChronoField.YEAR)
-                .appendLiteral(" à ")
-                .appendValue(ChronoField.HOUR_OF_DAY)
-                .appendLiteral(':')
-                .appendValue(ChronoField.MINUTE_OF_HOUR)
-                .appendLiteral(':')
-                .appendValue(ChronoField.SECOND_OF_MINUTE)
-                .toFormatter()
-                .withZone(ZoneId.of("UTC+2"))
-                .withLocale(Locale.FRANCE);
+        DateTimeFormatter intervalEndFormatter = dateTimeFormatter("à");
 
         File file = new File(fileScheduleId);
         file.createNewFile();
@@ -324,7 +297,7 @@ public class Main {
                         scheduleInterval.scheduleId +
                                 "     " +
                                 intervalStartFormatter.format(scheduleInterval.start.toInstant()) +
-                                "       " +
+                                "     " +
                                 intervalEndFormatter.format(scheduleInterval.end.toInstant()) + "\n"
                 );
             }
@@ -341,8 +314,23 @@ public class Main {
         fileWriter.close();
     }
 
-    public record Course(Component component, Interval interval) {
+    private DateTimeFormatter dateTimeFormatter(String dateTimeSeparator) {
+        return new DateTimeFormatterBuilder()
+                .appendValue(ChronoField.DAY_OF_MONTH).appendLiteral('/')
+                .appendValue(ChronoField.MONTH_OF_YEAR)
+                .appendLiteral('/')
+                .appendValue(ChronoField.YEAR)
+                .appendLiteral(String.format(" %s ", dateTimeSeparator))
+                .appendValue(ChronoField.HOUR_OF_DAY)
+                .appendLiteral(':')
+                .appendValue(ChronoField.MINUTE_OF_HOUR).appendLiteral(':')
+                .appendValue(ChronoField.SECOND_OF_MINUTE)
+                .toFormatter()
+                .withZone(ZoneId.of("UTC+2"))
+                .withLocale(Locale.FRANCE);
 
     }
+
+    public record Course(Component component, Interval interval) {}
 
 }

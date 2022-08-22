@@ -1,4 +1,5 @@
 plugins {
+    id 'com.github.johnrengelman.shadow' version '7.1.2'
     id 'java'
 }
 sourceCompatibility = '17'
@@ -19,3 +20,12 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+shadowJar {
+    manifest {
+        attributes(
+                'Main-Class': 'be.hokkaydo.Main'
+        )
+    }
+}
+
